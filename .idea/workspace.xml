@@ -4,10 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1935c6b1-7883-4e0b-9d7a-a2f0abc2eaec" name="Changes" comment="implement baseline single-cell FitzHugh-Nagumo model with Forward Euler">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fhn_1d.py" beforeDir="false" afterPath="$PROJECT_DIR$/fhn_1d.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/fhn_2d.py" beforeDir="false" afterPath="$PROJECT_DIR$/fhn_2d.py" afterDir="false" />
+    <list default="true" id="1935c6b1-7883-4e0b-9d7a-a2f0abc2eaec" name="Changes" comment="One-dimensional FitzHugh-Nagumo propagation simulation.">
+      <change beforePath="$PROJECT_DIR$/fhn_single_cell.py" beforeDir="false" afterPath="$PROJECT_DIR$/fhn_single_cell.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -81,7 +79,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1790090510027</updated>
-      <workItem from="1790090511035" duration="4764000" />
+      <workItem from="1790090511035" duration="5102000" />
     </task>
     <task id="LOCAL-00001" summary="implement baseline single-cell FitzHugh-Nagumo model with Forward Euler">
       <option name="closed" value="true" />
@@ -91,7 +89,15 @@
       <option name="project" value="LOCAL" />
       <updated>1790091520436</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="One-dimensional FitzHugh-Nagumo propagation simulation.">
+      <option name="closed" value="true" />
+      <created>1790124263962</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1790124263962</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -99,7 +105,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="implement baseline single-cell FitzHugh-Nagumo model with Forward Euler" />
-    <option name="LAST_COMMIT_MESSAGE" value="implement baseline single-cell FitzHugh-Nagumo model with Forward Euler" />
+    <MESSAGE value="One-dimensional FitzHugh-Nagumo propagation simulation." />
+    <option name="LAST_COMMIT_MESSAGE" value="One-dimensional FitzHugh-Nagumo propagation simulation." />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/cardiac_gpu_research$fhn_2d.coverage" NAME="fhn_2d Coverage Results" MODIFIED="1790122757384" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
