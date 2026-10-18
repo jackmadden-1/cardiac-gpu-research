@@ -1,0 +1,243 @@
+<!doctype html>
+<!--
+  WebGPU FitzHugh-Nagumo starter: forward Euler / FD vs D2Q5 lattice Boltzmann.
+
+  Run it (WebGPU needs a secure context, so use a local server, not file://):
+      cd webgpu
+      python -m http.server 8000
+  then open http://localhost:8000 in Chrome/Edge 113+, Safari 26+ or Firefox 141+.
+
+  Controls: click/drag on the field to stimulate, buttons to reset or switch method.
+  The M node-updates/s readout is a rough wall-clock number. For the paper, use
+  GPU timestamp queries ("timestamp-query" feature) instead.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FHN WebGPU: Euler vs LBM</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #ddd; margin: 16px; }
+  #wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  canvas { width: min(90vw, 640px); height: min(90vw, 640px); image-rendering: pixelated; border: 1px solid #333; cursor: crosshair; }
+  .panel { min-width: 260px; max-width: 340px; }
+  button, select, input { font: inherit; margin: 2px 0; }
+  label { display: block; margin-top: 8px; }
+  #stats { font-family: ui-monospace, monospace; white-space: pre; margin-top: 12px; color: #9cf; }
+  #err { color: #f88; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>FitzHugh-Nagumo on WebGPU: forward Euler/FD vs lattice Boltzmann</h2>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div class="panel">
+    <label>Method
+      <select id="method">
+        <option value="0">Forward Euler + 5-point FD</option>
+        <option value="1">Lattice Boltzmann D2Q5 (BGK)</option>
+      </select>
+    </label>
+    <label>Grid size
+      <select id="size">
+        <option>256</option><option selected>512</option><option>1024</option><option>2048</option>
+      </select>
+    </label>
+    <label>Time step dt <input id="dt" type="number" value="0.05" step="0.01" min="0.001"></label>
+    <label>Steps per frame <input id="spf" type="range" min="1" max="200" value="20"> <span id="spfv">20</span></label>
+    <div style="margin-top:10px">
+      <button id="spiral">Reset: spiral</button>
+      <button id="rest">Reset: rest</button>
+      <button id="pause">Pause</button>
+    </div>
+    <div id="stats"></div>
+    <div id="err"></div>
+    <p style="font-size:13px;color:#999">dx = 1, D = 1, a = 0.7, b = 0.8, &epsilon; = 0.08.
+      Euler is stable for dt &le; dx&sup2;/(4D) = 0.25. LBM uses &tau; = 1/2 + 3 D dt / dx&sup2;.</p>
+  </div>
+</div>
+
+<script type="module">
+import { FD_WGSL, LBM_WGSL, RENDER_WGSL } from './shaders.js';
+
+// ---------------------------------------------------------------------------
+// Host code
+// ---------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const fail = msg => { $('err').textContent = msg; throw new Error(msg); };
+
+if (!navigator.gpu) fail('WebGPU is not available in this browser.');
+const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+if (!adapter) fail('No WebGPU adapter found.');
+const device = await adapter.requestDevice({
+  requiredLimits: {
+    maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
+    maxBufferSize: adapter.limits.maxBufferSize,
+  },
+});
+device.lost.then(info => fail('GPU device lost: ' + info.message));
+
+const canvas = $('c');
+const ctx = canvas.getContext('webgpu');
+const format = navigator.gpu.getPreferredCanvasFormat();
+ctx.configure({ device, format });
+
+const FHN = { a: 0.7, b: 0.8, eps: 0.08, D: 1.0, dx: 1.0 };
+function restingState() {          // Newton on the nullcline intersection
+  let v = -1.2;
+  for (let k = 0; k < 50; k++) {
+    const f = v - v ** 3 / 3 - (v + FHN.a) / FHN.b;
+    const df = 1 - v * v - 1 / FHN.b;
+    v -= f / df;
+  }
+  return [v, (v + FHN.a) / FHN.b];
+}
+const [V_REST, W_REST] = restingState();
+
+const mkPipe = code => device.createComputePipeline({
+  layout: 'auto', compute: { module: device.createShaderModule({ code }), entryPoint: 'main' },
+});
+const fdPipe = mkPipe(FD_WGSL);
+const lbmPipe = mkPipe(LBM_WGSL);
+const renderMod = device.createShaderModule({ code: RENDER_WGSL });
+const renderPipe = device.createRenderPipeline({
+  layout: 'auto',
+  vertex: { module: renderMod, entryPoint: 'vs' },
+  fragment: { module: renderMod, entryPoint: 'fs', targets: [{ format }] },
+  primitive: { topology: 'triangle-list' },
+});
+
+const uniform = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+const STORAGE = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
+
+let S = null;  // simulation state (buffers + bind groups)
+
+function build(n, init) {
+  if (S) for (const b of S.buffers) b.destroy();
+  canvas.width = n; canvas.height = n;
+  const N = n * n;
+  const v = new Float32Array(N).fill(V_REST);
+  const w = new Float32Array(N).fill(W_REST);
+  if (init === 'spiral') {         // broken wave, same as fhn_2d.py (scaled to n)
+    const s = n / 200;
+    for (let y = 0; y < n / 2; y++) for (let x = 0; x < n; x++) {
+      const i = y * n + x;
+      if (x >= 95 * s && x < 105 * s) v[i] = 1.5;
+      if (x >= 80 * s && x < 95 * s) w[i] = 1.0;
+    }
+  }
+  // FD state (v, w) interleaved
+  const vw = new Float32Array(2 * N);
+  for (let i = 0; i < N; i++) { vw[2 * i] = v[i]; vw[2 * i + 1] = w[i]; }
+  // LBM populations at equilibrium, SoA
+  const f = new Float32Array(5 * N);
+  const wts = [1 / 3, 1 / 6, 1 / 6, 1 / 6, 1 / 6];
+  for (let k = 0; k < 5; k++) for (let i = 0; i < N; i++) f[k * N + i] = wts[k] * v[i];
+
+  const buf = (data) => {
+    const b = device.createBuffer({ size: data.byteLength, usage: STORAGE });
+    device.queue.writeBuffer(b, 0, data);
+    return b;
+  };
+  const fdA = buf(vw), fdB = buf(vw);
+  const lbA = buf(f), lbB = buf(f);
+  const wl = buf(w);
+  const vis = buf(v);
+
+  const bg = (pipe, entries) => device.createBindGroup({
+    layout: pipe.getBindGroupLayout(0),
+    entries: entries.map((buffer, binding) => ({ binding, resource: { buffer } })),
+  });
+  S = {
+    n, step: 0, buffers: [fdA, fdB, lbA, lbB, wl, vis],
+    fd: [bg(fdPipe, [uniform, fdA, fdB, vis]), bg(fdPipe, [uniform, fdB, fdA, vis])],
+    lbm: [bg(lbmPipe, [uniform, lbA, lbB, vis, wl]), bg(lbmPipe, [uniform, lbB, lbA, vis, wl])],
+    render: bg(renderPipe, [uniform, vis]),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// UI state
+// ---------------------------------------------------------------------------
+let paused = false, method = 0, lastInit = 'spiral';
+let stim = { on: false, x: 0, y: 0 };
+const reset = (init = lastInit) => { lastInit = init; simTime = 0; build(+$('size').value, init); };
+$('spiral').onclick = () => reset('spiral');
+$('rest').onclick = () => reset('rest');
+$('size').onchange = () => reset();
+$('method').onchange = () => { method = +$('method').value; reset(); };
+$('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'Run' : 'Pause'; };
+$('spf').oninput = () => { $('spfv').textContent = $('spf').value; };
+
+const toGrid = e => {
+  const r = canvas.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * S.n, (1 - (e.clientY - r.top) / r.height) * S.n];
+};
+canvas.onpointerdown = e => { stim.on = true; [stim.x, stim.y] = toGrid(e); };
+canvas.onpointermove = e => { if (stim.on) [stim.x, stim.y] = toGrid(e); };
+window.onpointerup = () => { stim.on = false; };
+
+function writeParams(dt) {
+  const tau = 0.5 + 3 * FHN.D * dt / (FHN.dx * FHN.dx);
+  const u = new ArrayBuffer(64);
+  const U = new Uint32Array(u), F = new Float32Array(u);
+  U[0] = S.n; U[1] = S.n; U[2] = stim.on ? 1 : 0;
+  F[4] = dt; F[5] = FHN.dx; F[6] = FHN.D; F[7] = FHN.a;
+  F[8] = FHN.b; F[9] = FHN.eps; F[10] = tau; F[11] = stim.x;
+  F[12] = stim.y; F[13] = Math.max(3, S.n / 64); F[14] = 2.0;
+  device.queue.writeBuffer(uniform, 0, u);
+  return tau;
+}
+
+// ---------------------------------------------------------------------------
+// Main loop
+// ---------------------------------------------------------------------------
+let tWin = performance.now(), stepsWin = 0, simTime = 0;
+reset('spiral');
+
+function frame() {
+  const dt = Math.max(1e-4, +$('dt').value);
+  const tau = writeParams(dt);
+  const spf = paused ? 0 : +$('spf').value;
+  const enc = device.createCommandEncoder();
+  const groups = Math.ceil(S.n / 16);
+  for (let k = 0; k < spf; k++) {
+    const pass = enc.beginComputePass();
+    pass.setPipeline(method === 0 ? fdPipe : lbmPipe);
+    pass.setBindGroup(0, (method === 0 ? S.fd : S.lbm)[S.step & 1]);
+    pass.dispatchWorkgroups(groups, groups);
+    pass.end();
+    S.step++;
+  }
+  const rp = enc.beginRenderPass({
+    colorAttachments: [{ view: ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store',
+                         clearValue: { r: 0, g: 0, b: 0, a: 1 } }],
+  });
+  rp.setPipeline(renderPipe);
+  rp.setBindGroup(0, S.render);
+  rp.draw(3);
+  rp.end();
+  device.queue.submit([enc.finish()]);
+
+  stepsWin += spf; simTime += spf * dt;
+  const now = performance.now();
+  if (now - tWin > 1000) {
+    const sps = stepsWin / ((now - tWin) / 1000);
+    const limit = FHN.dx ** 2 / (4 * FHN.D);
+    $('stats').textContent =
+      `method   ${method === 0 ? 'Euler/FD' : 'LBM D2Q5'}\n` +
+      `grid     ${S.n} x ${S.n}\n` +
+      `t        ${simTime.toFixed(1)}\n` +
+      `steps/s  ${sps.toFixed(0)}\n` +
+      `MNUPS    ${(sps * S.n * S.n / 1e6).toFixed(1)}  (wall clock, rough)\n` +
+      (method === 0
+        ? `dt/limit ${(dt / limit).toFixed(2)} ${dt > limit ? ' UNSTABLE' : ''}`
+        : `tau      ${tau.toFixed(3)}`);
+    tWin = now; stepsWin = 0;
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
