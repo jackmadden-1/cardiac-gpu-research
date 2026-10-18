@@ -1,0 +1,8 @@
+# Paper and LaTeX build output (kept local, not in the repo)
+paper/
+out/
+
+# Python
+__pycache__/
+*.pyc
+.venv/

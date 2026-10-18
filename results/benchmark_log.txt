@@ -1,0 +1,44 @@
+
+[1] Grid convergence (1D)
+  reference FD dx=0.0625: CV = 0.8116
+  fd  dx=1.0    CV=0.7657 rel.err=5.66e-02 rms(t_act)=7.573 0.10s
+  lbm dx=1.0    CV=0.7752 rel.err=4.49e-02 rms(t_act)=5.983 0.08s
+  fd  dx=0.5    CV=0.8010 rel.err=1.31e-02 rms(t_act)=1.693 0.53s
+  lbm dx=0.5    CV=0.8026 rel.err=1.11e-02 rms(t_act)=1.426 0.49s
+  fd  dx=0.25   CV=0.8091 rel.err=3.13e-03 rms(t_act)=0.394 3.59s
+  lbm dx=0.25   CV=0.8095 rel.err=2.62e-03 rms(t_act)=0.332 3.45s
+  fd  dx=0.125  CV=0.8111 rel.err=6.24e-04 rms(t_act)=0.078 25.04s
+  lbm dx=0.125  CV=0.8112 rel.err=4.97e-04 rms(t_act)=0.063 25.48s
+  wrote results/convergence_1d.csv
+
+[2] Time-step sweep (1D, dx = 0.5)
+  fd  dt/dx^2=0.1  CV=0.8025 rms=1.404
+  lbm dt/dx^2=0.1  CV=0.8162 rms=0.666
+  fd  dt/dx^2=0.2  CV=0.8010 rms=1.693
+  lbm dt/dx^2=0.2  CV=0.8026 rms=1.426
+  fd  dt/dx^2=0.4  CV=0.7974 rms=2.264
+  lbm dt/dx^2=0.4  CV=0.7508 rms=10.019
+  fd  dt/dx^2=0.5  UNSTABLE (blew up)
+  lbm dt/dx^2=0.5  CV=0.7146 rms=16.674
+  fd  dt/dx^2=0.6  UNSTABLE (blew up)
+  lbm dt/dx^2=0.6  CV=0.6748 rms=24.880
+  fd  dt/dx^2=1.0  UNSTABLE (blew up)
+  lbm dt/dx^2=1.0  stable, but the wave did not propagate
+  fd  dt/dx^2=2.0  UNSTABLE (blew up)
+  lbm dt/dx^2=2.0  stable, but the wave did not propagate
+  fd  dt/dx^2=4.0  UNSTABLE (blew up)
+  lbm dt/dx^2=4.0  stable, but the wave did not propagate
+  wrote results/dt_sweep_1d.csv
+
+[3] 2D throughput (NumPy, CPU)
+  fd  N=128      7.22 M node-updates/s
+  lbm N=128      5.79 M node-updates/s
+  fd  N=256      6.61 M node-updates/s
+  lbm N=256      5.47 M node-updates/s
+  fd  N=512      6.29 M node-updates/s
+  lbm N=512      5.17 M node-updates/s
+  fd  N=1024     6.29 M node-updates/s
+  lbm N=1024     4.46 M node-updates/s
+  wrote results/throughput_2d_numpy.csv
+
+Done.
