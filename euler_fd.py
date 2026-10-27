@@ -17,7 +17,7 @@ Time stepping:
 
 import numpy as np
 
-from fhn_model import FHNParams, reaction
+from fhn_model import FHNParams
 
 
 def laplacian(v, dx):
@@ -30,7 +30,7 @@ def laplacian(v, dx):
 
 def step(v, w, stimulus, dt, dx, p: FHNParams):
     """Advance (v, w) by one forward-Euler step. Returns new arrays."""
-    rv, rw = reaction(v, w, stimulus, p)
+    rv, rw = p.reaction(v, w, stimulus)
     v_new = v + dt * (p.D * laplacian(v, dx) + rv)
     w_new = w + dt * rw
     return v_new, w_new

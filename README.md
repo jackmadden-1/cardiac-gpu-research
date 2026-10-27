@@ -11,11 +11,13 @@ method (LBM) solver, with WebGPU as the target compute platform.
 | --- | --- |
 | `fhn_single_cell.py` | Single-cell FHN, forward Euler (your original script) |
 | `fhn_1d.py` | 1D cable, forward Euler + FD (your original script) |
-| `fhn_model.py` | Shared FHN parameters, reaction terms, resting state, Euler stability limit |
+| `fhn_model.py` | Model parameters and reaction terms: classic FHN (`FHNParams`) and Fenton's modified FHN (`FentonFHNParams`, Rheaume et al. CinC 2023) and standard FHN (`FentonFHNParams.standard()`) |
 | `euler_fd.py` | FD solver (1D/2D), zero-flux ghost-node boundaries |
 | `lattice_boltzmann/lbm_fhn.py` | LBM solver: D1Q3 and D2Q5, BGK collision, bounce-back walls |
 | `fhn_2d.py` | 2D spiral-wave demo; set `METHOD = "euler"` or `"lbm"` |
 | `benchmarks/compare_euler_lbm.py` | Convergence, time-step sweep and CPU throughput, writes to `results/` |
+| `benchmarks/tau_sweep.py` | LBM relaxation-time sweep (classic FHN): finds the most accurate tau |
+| `benchmarks/convergence_study.py` | Task 1: Euler vs LBM convergence over (dx, dt, tau) and cost to reach a tolerance. `--model modified` (Rheaume et al. CinC 2023) or `--model standard` (Fenton's standard FHN) |
 | `benchmarks/check_webgpu.py` | Runs the WebGPU kernels headless and checks them against NumPy |
 | `webgpu/index.html` | Interactive WebGPU demo (both methods, click to stimulate) |
 | `webgpu/shaders.js` | WGSL compute + render shaders |

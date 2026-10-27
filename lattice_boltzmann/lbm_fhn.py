@@ -46,7 +46,7 @@ Boltzmann Method (Springer, 2017), ch. 8 (advection-diffusion).
 
 import numpy as np
 
-from fhn_model import FHNParams, reaction
+from fhn_model import FHNParams
 
 CS2 = 1.0 / 3.0
 W_D1Q3 = np.array([2.0 / 3.0, 1.0 / 6.0, 1.0 / 6.0])
@@ -72,7 +72,7 @@ def density(f):
 
 def _collide(f, w, stimulus, dt, tau, p: FHNParams, wts):
     v = f.sum(axis=0)
-    rv, rw = reaction(v, w, stimulus, p)
+    rv, rw = p.reaction(v, w, stimulus)
     shape = (len(wts),) + (1,) * v.ndim
     wk = wts.reshape(shape)
     f_star = f - (f - wk * v) / tau + dt * wk * rv
